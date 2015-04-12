@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import sys
+
 PY3 = sys.version>'3'
 
 if PY3: # pragma: no cover
@@ -151,3 +152,30 @@ try: # pragma: no cover
     import thread
 except ImportError: # pragma: no cover
     import _thread as thread
+
+try:  # pragma: no cover
+    from time import monotonic as monotonic_time
+except ImportError:  # pragma: no cover
+    if sys.platform == "linux2":
+        # Adapted from http://stackoverflow.com/questions/1205722/
+        import ctypes
+        import os
+        CLOCK_MONOTONIC_RAW = 4  # see <linux/time.h>
+
+        class timespec(ctypes.Structure):
+            _fields_ = [
+                ('tv_sec', ctypes.c_long),
+                ('tv_nsec', ctypes.c_long)
+            ]
+        librt = ctypes.CDLL('librt.so.1', use_errno=True)
+        clock_gettime = librt.clock_gettime
+        clock_gettime.argtypes = [ctypes.c_int32, ctypes.POINTER(timespec)]
+
+        def monotonic_time():
+            t = timespec()
+            if clock_gettime(CLOCK_MONOTONIC_RAW, ctypes.pointer(t)) != 0:
+                errno_ = ctypes.get_errno()
+                raise OSError(errno_, os.strerror(errno_))
+            return t.tv_sec + t.tv_nsec * 1e-9
+    else:
+        from time import monotonic  # raises ImportError
